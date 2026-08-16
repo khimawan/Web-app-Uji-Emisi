@@ -1,0 +1,22 @@
+{
+  "name": "web-app-uji-emisi",
+  "version": "1.0.0",
+  "description": "Aplikasi Web Uji Emisi - Vehicle Emission Testing Application",
+  "scripts": {
+    "setup": "bash setup.sh",
+    "setup:backend": "cd backend && go mod tidy",
+    "setup:frontend": "cd frontend && npm install",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && go run main.go",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "db:setup": "sudo -u postgres psql -c \"CREATE DATABASE uji_emisi;\" 2>/dev/null || true",
+    "db:migrate": "sudo -u postgres psql -d uji_emisi -f migrations/001_initial_schema.sql"
+  },
+  "keywords": ["emission", "vehicle", "testing", "golang", "react", "typescript"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

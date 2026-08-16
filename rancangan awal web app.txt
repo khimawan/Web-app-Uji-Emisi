@@ -1,0 +1,157 @@
+Web app Uji Emisi
+
+- web app digunakan untuk input data kendaraan dan data hasi emisi kendaraan
+- tambahkan redme seperti pada project ini (https://github.com/khimawan/Web-app-Uji-Emisi-Count.git)
+- buatkan juga dokumentasi selengkap mungkin termasuk file PRD, ERD dan file penunjang lainya
+- berikan halaman autentifikasi dengan kolom id dan password
+- buat web app berbasis javascript, typescript dan menggunakan backend golang
+- buat akun awal admin dengan ketentuan berikut
+    * Nama : Superuser Admin
+    * Username : adminmas
+    * Pasword : adminmas
+- buat akun awal Supervisor dengan ketentuan berikut
+    * Nama : Kang Supervisor
+    * Username : supervisoraja
+    * Pasword : supervisoraja
+- buat akun awal Anggota dengan ketentuan berikut
+    * Nama : Kroco01
+    * Username : kroco01
+    * Pasword : kroco01
+
+** Home Page **
+- Deskripsi aplikasi
+    * berikan deskripsi aplikasi beserta gambar pada halaman awal
+    * deskripsi dan gambar dapat di edit, hapus, dan upload oleh admin dan spv
+- Working instruction
+    * berikan view halaman pdf yang dapat di edit, hapus dan upload oleh admin dan spv
+
+** Page 1 (Input Data Kendaraan) **
+- halaman ini berisikan list input untuk data kendaraan
+- berikan template .csv yang dapat diunduh
+- berikan juga bagian untuk upload template
+- berikan tabel pada bagian bawah berupa list history input agar dapat dilihat datanya dan diedit
+- berikan opsi untuk edit dan delete multiple line pada tabel
+
+* berikut list data yang diambil :
+- Kategori kendaraan : (Dinas/Umum)
+- Jenis kendaraan : (Bensin M(Angkutan penumpang)/ Bensin N&O(Angkutan barang/gandeng)/Solar JBB(<=3,5T)/ Solar GVW(>3,5T))
+- Plat nomor : (Contoh : B 1234 CDE)
+- Merek mobil : (contoh : Totota)
+- Tipe mobil : (Contoh ; Avanza)
+- Kapasitas mesin (cc): (Contoh : 1500)
+- Tahun pembuatan : (Contoh : 2020)
+
+
+** Page 2 (Input Data Emisi) **
+- input kendaraan dari Page 1 akan digunakan untuk diberikan tambahan data hasil uji emisi
+- untuk input data emisi kendaraan bensin tidak perlu input nilai opasitas
+- untuk input data emisi kendaraan solar hanya perlu memasukkan nilai opasitas tanpa perlu input nilai CO, CO2, HC, O2, dan lamda
+- berikan pop-up notifikasi hasil emisi kendaraan setelah melakukan input data hasil uji emisi
+- pop up berisikan :
+    * Hasil Uji : Lulus uji emisi/ Tidak lulus uji emisi
+    * Valid/ Tidak
+    * Catatan perbaikan :
+
+* berikut list data tambahanya :
+- Pilih kendaraan :
+    * kendaraan dipilih dari data kendaraan yang telah di input pada halaman 2
+    * buatkan search bar untuk mencari data kendaraaan yang akan dipilih
+- CO (%):
+- CO2 (%):
+- HC (ppm):
+- O2 (%):
+- Lamda :
+- Opasitas (%):
+
+
+** Page 3 (Data Hasil Uji) **
+- halam menampilkan hasil data yang telah di input pada halaman input data kendaraan dan input hasil uji emisi secara realtime
+- berikan juka feature scroll up and down pada halaman
+- pada bagian atas di isikan berberapa data angka dari :
+    * hasil total kendaraan yang masuk
+    * total kendaraan dinas
+    * total kendaraan umum
+    * total kendaraan lolos uji emisi
+    * total kendaraan tidak lolos uji emisi
+- data angka yang tampil sejajar horizontal
+- kemudian dibawahnya tampilkan berberapa data dalam bentuk pie chrd berikut
+    * pie chard yang berisikan data kendaraan dinas dibanding kendaraan umum dalam jumlah dan persentase
+    * pie chard yang berisikan perbandingan data total kendaraan lulus uji emisi dan tidak lulus uji emisi dalam jumlah dan persentase
+    * pie chard yang berisikan perbandingan data total kendaraan bensin dan solar dalam jumlah dan persentase
+- data pie chard yang tampil sejajar horizontal
+- kemudian dibawahnya lagi berikan data diagram batang jumlah dari : total kendaraan dinas, total kendaran umum,total kendaraan bensin, dan total kendaraan solar
+- dan dibawahnya lagi berikan tabel data yang berisikan semua kendaraan yang telah di input
+- tabel data berisikan semua data dengan kolom :
+    * No
+    * Waktu input (tanngal dan jam)
+    * Kategori kendaraan
+    * Jenis kendaraan
+    * Plat nomor
+    * Merek kendaraan
+    * Tipe kendaraan
+    * Kapasitas mesin
+    * Tahun pembuatan
+    * Kategori kendaraan
+    * CO
+    * CO2
+    * HC
+    * O2
+    * Lamda
+    * Opasitas
+    * Hasil Uji
+    * Valid/Tidak
+    * Catatan
+- berikan feature edit pada tabel
+- berikan feature scroll up and downpada tabel
+- berikan feature multiple delete pada tabel
+- pada bagian bawah tabel berikan feature download summary data dalam bentuk csv, excel, maupun pdf
+
+** Page 4 (Input Nilai Parameter) **
+- halaman ini berisikan untuk meng edit parameter untuk hasil uji emisi berdasarkan parameter input data hasil uji emisi
+- halaman ini juga berisikan edit parameter yang muncul pada pop up hasil uji emisi
+- halaman ini hanya dapat diakses dan di edit oleh akun supervisor dan admin
+- edit parameter setiap kategori dapat dilihat dan di edit pada tampilan sebagai berikut
+|Katrgori|Tahun Pembuatan|CO(%)|HC(ppm)|Opasitas(%)|
+|Bensin M|<2007|4|1000|-|
+|Bensin M|2007-2018|1|150|-|
+|Bensin M|>2018|0.5|100|-|
+|Bensin N&O|<2007|4|1000|-|
+|Bensin N&O|2007-2018|1|150|-|
+|Bensin N&O|>2018|0.5|100|-|
+|Solar JBB|<2010|-|-|65|
+|Solar JBB|2010-2021|-|-|40|
+|Solar JBB|>2021|-|-|30|
+|Solar GVW|<2010|-|-|65|
+|Solar GVW|2010-2021|-|-|40|
+|Solar GVW|>2021|-|-|35|
+- untuk parameter dapat di ubah dan ditambahkan
+- pada parameter untuk menentukan lulus uji emisi dapat diketahui berdasarkan kategori dan tahun pembuatan yang memiliki parameter minimum yang tertera pada tabel sebagai standar bawah
+- untuk Parameter semua kategori Bensin tidak memasukkan opasitas kedalam perhitungan minimum unutk standar lulus uji emisi
+- untuk parameter Bensin hanya dilihat berdasar persentase CO dan HC
+- untuk Parameter semua kategori Solar tidak memasukkan CO dan HC kedalam perhitungan minimum unutk standar lulus uji emisi
+- untuk parameter Solar hanya dilihat berdasar persentase opasitas
+- kemudian berikan list untuk pop up notifikasi pada halaman data hasil uji
+- list pop up dapat ditambahkan dan di edit
+- list pop up berupa tabel yang mencantumkan jika parameter terpenuhi akan timbul pesan pada catatan pop up
+- untuk isi list pop up dapat tercantum dalam tabel berikut sebagai contoh
+|Jenis Kendaraan|Tahun Pembuatan|Parameter Uji|Nilai|Note|
+|Bensin M, Bensin N&O|>1990|O2|>20|Indikasi kebocoran exhaust|
+|Bensin M|<2018|HC|>4|Indikasi kerusakan: busi mati/lemah, kabel busi putus, koil pengapian rusak, atau kompresi rendah akibat ring piston aus|
+|Solar JBB|>2021|Opasitas|>70|Indikasi Boros BBM|
+- Jenis kendaraan pada input tabel pop up dapat dipilih lebih dari 1 dari pilihan : Bensin M, Bensin N&O, Solar JBB dan Solar GVW
+- untuk parameter uji pada tabel pop up merujuk pada CO, CO2, HC, O2, Lamda, dan Opasitas yang dapat dipilih hanya salah satu
+
+** Page 5 (Halaman Admin) **
+- berisikan management anggota
+- halaman hanya dapat diakses oleh akun admin dan supervisor
+- halaman berisikan tabel akun akun user
+- akun dapat diubah, dihapus, atau ditambahkan oleh spv maupun admin
+- akun admin absolute tidak dapat ditambah, dihapus hanya dapat di edit uleh akun admin
+- kolom tabel akun user berisikan :
+    * Nama
+    * Username
+    * Password
+    * Role (Anggota/Supervisor/Admin)
+- user terdiri dalam kategori anggota, supervisor, dan admin.
+
+
