@@ -32,6 +32,8 @@ uploads/
 
 # Database
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 
 # Go
@@ -48,3 +50,4 @@ coverage/
 *.md
 !README.md
 !DEVIN.md
+!docs/*.md

@@ -1,6 +1,6 @@
 # Aplikasi Uji Emisi
 
-Aplikasi web untuk mengelola dan mencatat hasil uji emisi kendaraan. Aplikasi ini memungkinkan pengguna untuk mencatat data kendaraan, melakukan uji emisi, dan melihat hasil uji dalam bentuk tabel serta mengekspor data ke format CSV, Excel, dan PDF.
+Aplikasi web untuk mengelola dan mencatat hasil uji emisi kendaraan. Aplikasi ini memungkinkan pengguna untuk mencatat data kendaraan, melakukan uji emisi, mengimpor data massal dari CSV/Excel, dan melihat hasil uji dalam bentuk tabel serta mengekspor data ke format CSV, Excel, dan PDF.
 
 ## Daftar Isi
 
@@ -13,6 +13,7 @@ Aplikasi web untuk mengelola dan mencatat hasil uji emisi kendaraan. Aplikasi in
 - [Struktur Aplikasi](#struktur-aplikasi)
 - [Akun Default](#akun-default)
 - [Panduan Penggunaan](#panduan-penggunaan)
+- [Pengujian](#pengujian)
 - [API Reference](#api-reference)
 - [Dokumentasi](#dokumentasi)
 - [Troubleshooting](#troubleshooting)
@@ -28,8 +29,10 @@ Aplikasi Uji Emisi adalah solusi web-based untuk mengelola dan mencatat proses u
 - Formulir input kendaraan dengan validasi real-time
 - Klasifikasi kendaraan (Dinas/Umum)
 - Pencatatan detail kendaraan (plat nomor, merek, tipe, tahun)
-- Pemilihan jenis bahan bakar (Bensin/Solar)
-- Input batch kendaraan via CSV
+- Pemilihan jenis bahan bakar (Bensin M, Bensin N&O, Solar JBB, Solar GVW)
+- Import massal dari **CSV dan Excel** memakai template siap-isi
+- Template Excel dilengkapi **dropdown** kategori/jenis dan daftar plat nomor terdaftar
+- Validasi per baris: baris salah ditolak, baris lain tetap tersimpan
 
 ### Uji Emisi
 - Interface input hasil uji untuk kendaraan terdaftar
@@ -37,6 +40,8 @@ Aplikasi Uji Emisi adalah solusi web-based untuk mengelola dan mencatat proses u
 - Input parameter uji (CO, CO2, HC, O2, Lambda untuk bensin)
 - Input Opasitas untuk kendaraan solar
 - Pop-up notifikasi hasil emisi
+- **Import hasil uji massal dari CSV/Excel**; status Lulus/Tidak Lulus dan catatan
+  tetap dihitung sistem sehingga identik dengan input manual
 
 ### Analisis dan Laporan
 - Dashboard dengan statistik hasil uji
@@ -44,14 +49,23 @@ Aplikasi Uji Emisi adalah solusi web-based untuk mengelola dan mencatat proses u
 - Diagram batang jumlah kendaraan
 - Export ke format CSV, Excel, dan PDF
 - Filter dan pencarian data multi-parameter
+- Bulk delete hasil uji
 
 ### Manajemen User
-- Sistem autentikasi dengan level akses berbeda (Admin, Supervisor, Anggota)
-- Manajemen akun user
+- Sistem autentikasi JWT dengan level akses berbeda (Admin, Supervisor, Anggota)
+- Username admin **disembunyikan** di halaman manajemen user
+- Kredensial akun admin hanya dapat diubah oleh admin itu sendiri
+- Akun admin tidak dapat dihapus
 
 ### Konfigurasi Sistem
 - Pengaturan standar batas emisi per kategori
 - Konfigurasi pop-up notifikasi
+- Upload **Working Instruction** (PDF) di halaman Home, lengkap dengan preview
+  dan tombol unduh — khusus Admin & Supervisor
+
+###;Halaman Beranda
+- Deskripsi aplikasi, galeri gambar, dan working instruction PDF
+- Semua pengguna dapat melihat & mengunduh; hanya Admin/Supervisor yang mengelola
 
 ## Teknologi yang Digunakan
 
@@ -60,6 +74,7 @@ Aplikasi Uji Emisi adalah solusi web-based untuk mengelola dan mencatat proses u
 - **Gin** - HTTP web framework
 - **GORM** - ORM untuk Go
 - **JWT** - JSON Web Token untuk autentikasi
+- **Excelize** - Baca/tulis file `.xlsx` untuk template & import data
 
 ### Database
 - **PostgreSQL** - Database relasional
@@ -89,8 +104,8 @@ Aplikasi Uji Emisi adalah solusi web-based untuk mengelola dan mencatat proses u
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/username/web-app-uji-emisi.git
-cd web-app-uji-emisi
+git clone https://github.com/khimawan/Web-app-Uji-Emisi.git
+cd Web-app-Uji-Emisi
 ```
 
 ### 2. Setup Backend
@@ -125,7 +140,7 @@ PORT=8080
 
 ```bash
 cd ../frontend
-npm install
+npm ci        # gunakan `npm install` hanya bila package.json berubah
 ```
 
 ## Menjalankan Aplikasi
@@ -149,6 +164,8 @@ npm run dev
 http://localhost:5173
 ```
 
+> Saat development, `vite.config.ts` memproxy dua path ke backend (`localhost:8080`): `/api` untuk REST API dan `/uploads` untuk file statis (gambar home, working instruction PDF). Tanpa proxy `/uploads`, Vite akan mengembalikan `index.html` sehingga file tidak tampil. Path file dari API selalu berupa path absolut (`/uploads/home/...`).
+
 ### Production Mode
 
 1. Build Frontend:
@@ -171,15 +188,23 @@ http://localhost:8080
 ## Struktur Aplikasi
 
 ```
-web-app-uji-emisi/
+Web-app-Uji-Emisi/
 ├── backend/                    # Backend Go
-│   ├── config/                 # Konfigurasi aplikasi
+│   ├── config/                 # Konfigurasi aplikasi & koneksi database
 │   ├── controllers/            # Handler HTTP
-│   ├── middleware/              # Middleware (auth, cors)
+│   │   ├── kendaraan.go        # CRUD kendaraan
+│   │   ├── kendaraan_csv.go    # Import CSV vehicles + generator template CSV
+│   │   ├── kendaraan_excel.go  # Generator template Excel kendaraan
+│   │   ├── hasil_uji.go        # CRUD hasil uji, statistik, export CSV
+│   │   ├── hasil_uji_import.go # Import hasil uji CSV/XLSX + template
+│   │   ├── home.go             # Konten beranda, gambar, working instruction
+│   │   └── user.go             # Manajemen user
+│   ├── middleware/             # Middleware (auth, role, cors)
 │   ├── models/                 # Model database
 │   ├── routes/                 # Route definitions
 │   ├── services/               # Business logic
 │   ├── utils/                  # Utility functions
+│   ├── uploads/                # File terunggah (diabaikan oleh git)
 │   ├── main.go                 # Entry point
 │   ├── go.mod                  # Go module
 │   └── .env                    # Environment variables
@@ -187,17 +212,18 @@ web-app-uji-emisi/
 │   ├── src/
 │   │   ├── components/         # Reusable components
 │   │   ├── pages/              # Page components
-│   │   ├── services/           # API services
+│   │   ├── services/           # API services (api.ts)
 │   │   ├── types/              # TypeScript types
 │   │   ├── hooks/              # Custom hooks
-│   │   ├── context/            # React context
-│   │   └── utils/              # Utility functions
+│   │   ├── context/            # React context (auth)
+│   │   └── utils/              # Utility functions (fileUrl)
 │   ├── public/                 # Static files
 │   ├── index.html              # HTML template
 │   ├── package.json            # Dependencies
+│   ├── package-lock.json       # Lockfile (jangan dihapus)
 │   ├── tsconfig.json           # TypeScript config
-│   ├── vite.config.ts          # Vite config
-│   └── tailwind.config.js      # Tailwind config
+│   ├── vite.config.ts          # Vite config (proxy /api dan /uploads ke backend)
+│   └── tailwind.config.js     # Tailwind config
 ├── docs/                       # Dokumentasi
 │   ├── PRD.md                  # Product Requirements Document
 │   ├── ERD.md                  # Entity Relationship Diagram
@@ -207,20 +233,16 @@ web-app-uji-emisi/
 
 ## Akun Default
 
-### Admin
-- **Nama:** Superuser Admin
-- **Username:** adminmas
-- **Password:** adminmas
+Akun berikut dibuat otomatis saat backend pertama kali dijalankan (seeding).
+Informasi ini **tidak ditampilkan** di halaman login.
 
-### Supervisor
-- **Nama:** Kang Supervisor
-- **Username:** supervisoraja
-- **Password:** supervisoraja
+| Role | Nama | Username | Password |
+|---|---|---|---|
+| Admin | Superuser Admin | `adminmas` | `adminmas` |
+| Supervisor | Kang Supervisor | `supervisoraja` | `supervisoraja` |
+| Anggota | Kroco01 | `kroco01` | `kroco01` |
 
-### Anggota
-- **Nama:** Kroco01
-- **Username:** kroco01
-- **Password:** kroco01
+> Ganti password akun-akun ini sebelum dipakai di lingkungan produksi.
 
 ## Panduan Penggunaan
 
@@ -235,6 +257,18 @@ web-app-uji-emisi/
 3. Isi form dengan data kendaraan
 4. Klik "Simpan" atau upload CSV untuk input batch
 5. Data akan muncul di tabel history
+
+**Upload CSV/Excel:** klik **Template CSV** atau **Template Excel** lebih dulu.
+Keduanya memuat panduan format dan contoh baris untuk seluruh nilai kategori
+(`Dinas`, `Umum`) dan jenis (`Bensin M`, `Bensin N&O`, `Solar JBB`,
+`Solar GVW`) yang tersedia. Versi Excel dilengkapi sheet `Daftar Nilai Valid`
+(daftar nilai + plat nomor yang sudah terdaftar) serta **dropdown** kategori dan
+jenis pada sheet `Data Kendaraan` supaya tidak ada salah ketik.
+Ganti/hapus baris contoh, isi data, lalu unggah lewat **Upload File**.
+Baris yang formatnya salah ditolak per baris dengan nomor baris dan
+alasannya; baris lain tetap tersimpan. Format `.xls` (Excel 97-2003) belum
+didukung — simpan ulang sebagai `.xlsx` atau `.csv`.
+Panduan lengkap ada di `docs/API.md` bagian 2.6.
 
 ### Input Data Emisi (Page 2)
 1. Login sebagai Admin, Supervisor, atau Anggota
@@ -252,6 +286,17 @@ web-app-uji-emisi/
 5. Gunakan filter dan pencarian jika diperlukan
 6. Download data dalam format CSV, Excel, atau PDF
 
+**Import hasil uji (CSV/Excel):** pada panel "Import Data Hasil Uji" klik
+**Template CSV** atau **Template Excel** untuk mendapatkan file contoh yang
+sudah terisi panduan, daftar plat nomor kendaraan terdaftar, dan baris contoh
+siap diedit. Isi kolom `plat_nomor` + parameter uji (`co`, `co2`, `hc`, `o2`,
+`lambda`, `opasitas`, `tanggal_uji`), lalu unggah lewat tombol **Upload File**.
+Hasil **lulus/tidak lulus dan catatan tetap dihitung sistem** dari Parameter
+aktif, sehingga hasilnya identik dengan input manual. Baris yang salah
+ditolak per baris dengan nomor baris dan alasannya.
+Format `.xls` (Excel 97-2003) belum didukung — simpan ulang sebagai `.xlsx`/`.csv`.
+Panduan lengkap ada di `docs/API.md` bagian 3.6–3.8.
+
 ### Input Nilai Parameter (Page 4)
 1. Login sebagai Admin atau Supervisor
 2. Klik menu "Parameter"
@@ -262,7 +307,19 @@ web-app-uji-emisi/
 1. Login sebagai Admin atau Supervisor
 2. Klik menu "Users"
 3. Tambah, edit, atau hapus akun user
-4. Catatan: Akun admin tidak dapat dihapus
+4. Catatan:
+   - Username admin ditampilkan sebagai `••••••••` dan hanya dapat diubah oleh admin itu sendiri
+   - Akun admin tidak dapat dihapus
+
+## Pengujian
+
+```bash
+# Unit test backend (parser CSV/XLSX, normalisasi angka, pemetaan kolom, template)
+cd backend && go test ./...
+
+# Type check + build production frontend
+cd frontend && npx tsc --noEmit && npm run build
+```
 
 ## API Reference
 
@@ -277,7 +334,9 @@ web-app-uji-emisi/
 - `GET /api/kendaraan/:id` - Detail kendaraan
 - `PUT /api/kendaraan/:id` - Update kendaraan
 - `DELETE /api/kendaraan/:id` - Hapus kendaraan
-- `POST /api/kendaraan/upload` - Upload CSV
+- `POST /api/kendaraan/upload` - Upload CSV/XLSX data kendaraan
+- `GET /api/kendaraan/template/csv` - Template input kendaraan (CSV)
+- `GET /api/kendaraan/template/excel` - Template input kendaraan (.xlsx)
 
 ### Hasil Uji
 - `GET /api/hasil-uji` - List hasil uji
@@ -285,6 +344,10 @@ web-app-uji-emisi/
 - `PUT /api/hasil-uji/:id` - Update hasil uji
 - `DELETE /api/hasil-uji/:id` - Hapus hasil uji
 - `GET /api/hasil-uji/statistics` - Statistik hasil uji
+- `GET /api/hasil-uji/export/csv` - Export hasil uji ke CSV
+- `GET /api/hasil-uji/template/csv` - Template import CSV
+- `GET /api/hasil-uji/template/excel` - Template import Excel (.xlsx)
+- `POST /api/hasil-uji/upload` - Import hasil uji dari CSV/XLSX
 
 ### Parameter
 - `GET /api/parameters` - List parameter
@@ -304,7 +367,7 @@ web-app-uji-emisi/
 - `POST /api/home/image` - Upload gambar
 - `DELETE /api/home/image/:id` - Hapus gambar
 - `GET /api/home/working-instruction` - Get working instruction
-- `POST /api/home/working-instruction` - Upload working instruction
+- `POST /api/home/working-instruction` - Upload working instruction (PDF, maks 10 MB — admin/supervisor)
 
 ### Users (Admin)
 - `GET /api/users` - List users
@@ -322,22 +385,42 @@ Dokumentasi lengkap dapat ditemukan di folder `docs/`:
 
 ## Troubleshooting
 
-1. **Database Connection Error**
+1. **Halaman putih kosong (blank white page)**
+   - `node_modules` rusak atau cache optimizer Vite basi. Perbaiki dengan:
+     ```bash
+     cd frontend
+     rm -rf node_modules node_modules/.vite
+     npm ci
+     ```
+   - Cara cepat mendeteksi masalah module: buka log Vite di terminal tempat `npm run dev` berjalan.
+
+2. **PDF working instruction / gambar tidak tampil**
+   - `vite.config.ts` harus memproxy `/uploads` ke `http://localhost:8080`. Tanpa proxy
+     tersebut Vite mengembalikan `index.html` sehingga file tidak dapat dirender.
+   - Pastikan `file_path` dari API berupa path absolut (`/uploads/home/...`).
+
+3. **Upload CSV/Excel ditolak**
+   - Unduh ulang template lewat tombol **Template CSV** / **Template Excel** dan pakai
+     strukturnya.
+   - Format `.xls` (Excel 97-2003) tidak didukung — simpan ulang sebagai `.xlsx` atau `.csv`.
+   - Baca panel merah "N baris ditolak": nomor baris mengacu ke nomor baris fisik file.
+
+4. **Database Connection Error**
    - Pastikan PostgreSQL berjalan
    - Periksa konfigurasi di file `.env`
-   - Pastikan database sudah dibuat
+   - Pastikan database sudah dibuat (schema & data awal dibuat otomatis oleh GORM)
 
-2. **Port Sudah Digunakan**
+5. **Port Sudah Digunakan**
    - Ubah port di file `.env` atau `vite.config.ts`
    - Atau hentikan process yang menggunakan port
 
-3. **Build Error**
+6. **Build Error**
    - Jalankan `go mod tidy` di backend
-   - Jalankan `npm install` di frontend
+   - Jalankan `npm ci` di frontend
    - Pastikan versi Go dan Node.js sesuai
 
-4. **Login Gagal**
-   - Pastikan akun sudah dibuat (jalankan seeding)
+7. **Login Gagal**
+   - Akun awal dibuat otomatis oleh seeding saat backend pertama kali berjalan
    - Periksa username dan password
 
 ## Lisensi
@@ -347,4 +430,4 @@ MIT License
 ## Kontak
 
 Untuk pertanyaan, dukungan, atau kontribusi, silakan hubungi:
-- GitHub Issues: https://github.com/username/web-app-uji-emisi/issues
+- GitHub Issues: https://github.com/khimawan/Web-app-Uji-Emisi/issues
