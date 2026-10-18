@@ -11,6 +11,12 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      // File statis (gambar, working instruction PDF) dilayani backend,
+      // tanpa proxy ini Vite mengembalikan index.html sehingga PDF tidak tampil.
+      '/uploads': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
     },
   },
 })

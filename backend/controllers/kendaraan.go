@@ -1,9 +1,6 @@
 package controllers
 
 import (
-	"encoding/csv"
-	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -56,7 +53,7 @@ func GetKendaraan(c *gin.Context) {
 	var total int64
 	query.Count(&total)
 
-	var kendaraan []models.Kendaraan
+	kendaraan := make([]models.Kendaraan, 0)
 	if err := query.Offset(offset).Limit(limit).Order("created_at DESC").Find(&kendaraan).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch kendaraan"})
 		return
@@ -174,100 +171,6 @@ func DeleteKendaraan(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Kendaraan deleted successfully"})
-}
-
-func UploadCSV(c *gin.Context) {
-	file, err := c.FormFile("file")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "No file uploaded"})
-		return
-	}
-
-	src, err := file.Open()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to open file"})
-		return
-	}
-	defer src.Close()
-
-	reader := csv.NewReader(src)
-	records, err := reader.ReadAll()
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid CSV format"})
-		return
-	}
-
-	if len(records) < 2 {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "CSV file is empty"})
-		return
-	}
-
-	userID, _ := c.Get("user_id")
-	total := len(records) - 1
-	success := 0
-	failed := 0
-	errors := []gin.H{}
-
-	for i, record := range records[1:] {
-		if len(record) < 7 {
-			errors = append(errors, gin.H{"row": i + 2, "message": "Invalid number of columns"})
-			failed++
-			continue
-		}
-
-		kapasitasMesin, err := strconv.Atoi(record[5])
-		if err != nil {
-			errors = append(errors, gin.H{"row": i + 2, "message": "Invalid kapasitas mesin"})
-			failed++
-			continue
-		}
-
-		tahunPembuatan, err := strconv.Atoi(record[6])
-		if err != nil {
-			errors = append(errors, gin.H{"row": i + 2, "message": "Invalid tahun pembuatan"})
-			failed++
-			continue
-		}
-
-		kendaraan := models.Kendaraan{
-			ID:             uuid.New().String(),
-			Kategori:       record[0],
-			Jenis:          record[1],
-			PlatNomor:      record[2],
-			Merek:          record[3],
-			Tipe:           record[4],
-			KapasitasMesin: kapasitasMesin,
-			TahunPembuatan: tahunPembuatan,
-			CreatedBy:      userID.(string),
-			CreatedAt:      time.Now(),
-			UpdatedAt:      time.Now(),
-		}
-
-		if err := config.DB.Create(&kendaraan).Error; err != nil {
-			errors = append(errors, gin.H{"row": i + 2, "message": fmt.Sprintf("Failed to create: %v", err)})
-			failed++
-		} else {
-			success++
-		}
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "CSV uploaded successfully",
-		"data": gin.H{
-			"total":   total,
-			"success": success,
-			"failed":  failed,
-			"errors":  errors,
-		},
-	})
-}
-
-func DownloadCSVTemplate(c *gin.Context) {
-	c.Header("Content-Type", "text/csv")
-	c.Header("Content-Disposition", "attachment; filename=template_kendaraan.csv")
-
-	c.String(http.StatusOK, "kategori,jenis,plat_nomor,merek,tipe,kapasitas_mesin,tahun_pembuatan\n")
 }
 
 func GetAllKendaraan(c *gin.Context) {

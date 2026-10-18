@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 	"web-app-uji-emisi/config"
 	"web-app-uji-emisi/models"
 )
@@ -41,37 +44,33 @@ func GetHasilUji(c *gin.Context) {
 
 	offset := (page - 1) * limit
 
-	type HasilUjiWithKendaraan struct {
-		models.HasilUji
-		models.Kendaraan
-	}
-
-	query := config.DB.Table("hasil_uji").
-		Select("hasil_uji.*, kendaraan.plat_nomor, kendaraan.merek, kendaraan.tipe, kendaraan.kategori, kendaraan.jenis, kendaraan.kapasitas_mesin, kendaraan.tahun_pembuatan").
-		Joins("JOIN kendaraan ON hasil_uji.kendaraan_id = kendaraan.id").
-		Where("hasil_uji.deleted_at IS NULL")
+	uji, kend := tabelHasilUji(), tabelKendaraan()
+	query := config.DB.Table(uji).
+		Select(daftarKolomHasilUjiJoin()).
+		Joins("JOIN " + kend + " ON " + uji + ".kendaraan_id = " + kend + ".id").
+		Where(uji + ".deleted_at IS NULL")
 
 	if search != "" {
-		query = query.Where("kendaraan.plat_nomor ILIKE ? OR kendaraan.merek ILIKE ?", "%"+search+"%", "%"+search+"%")
+		query = query.Where(kend+".plat_nomor ILIKE ? OR "+kend+".merek ILIKE ?", "%"+search+"%", "%"+search+"%")
 	}
 	if hasilUji != "" {
-		query = query.Where("hasil_uji.hasil_uji = ?", hasilUji)
+		query = query.Where(uji+".hasil_uji = ?", hasilUji)
 	}
 	if kategori != "" {
-		query = query.Where("kendaraan.kategori = ?", kategori)
+		query = query.Where(kend+".kategori = ?", kategori)
 	}
 	if tanggalMulai != "" {
-		query = query.Where("hasil_uji.tested_at >= ?", tanggalMulai)
+		query = query.Where(uji+".tested_at >= ?", tanggalMulai)
 	}
 	if tanggalAkhir != "" {
-		query = query.Where("hasil_uji.tested_at <= ?", tanggalAkhir+" 23:59:59")
+		query = query.Where(uji+".tested_at <= ?", tanggalAkhir+" 23:59:59")
 	}
 
 	var total int64
 	query.Count(&total)
 
-	var results []map[string]interface{}
-	if err := query.Offset(offset).Limit(limit).Order("hasil_uji.tested_at DESC").Find(&results).Error; err != nil {
+	results := make([]map[string]interface{}, 0)
+	if err := query.Offset(offset).Limit(limit).Order(uji + ".tested_at DESC").Find(&results).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch hasil uji"})
 		return
 	}
@@ -147,8 +146,8 @@ func CreateHasilUji(c *gin.Context) {
 		"success": true,
 		"message": "Hasil uji added successfully",
 		"data": gin.H{
-			"hasil_uji":    hasilUjiRecord,
-			"popup_notes":  triggeredNotes,
+			"hasil_uji":   hasilUjiRecord,
+			"popup_notes": triggeredNotes,
 		},
 	})
 }
@@ -251,12 +250,13 @@ func ExportCSV(c *gin.Context) {
 	c.Header("Content-Type", "text/csv")
 	c.Header("Content-Disposition", "attachment; filename=hasil_uji_emisi.csv")
 
-	var results []map[string]interface{}
-	config.DB.Table("hasil_uji").
-		Select("hasil_uji.*, kendaraan.plat_nomor, kendaraan.merek, kendaraan.tipe, kendaraan.kategori, kendaraan.jenis, kendaraan.kapasitas_mesin, kendaraan.tahun_pembuatan").
-		Joins("JOIN kendaraan ON hasil_uji.kendaraan_id = kendaraan.id").
-		Where("hasil_uji.deleted_at IS NULL").
-		Order("hasil_uji.tested_at DESC").
+	results := make([]map[string]interface{}, 0)
+	uji, kend := tabelHasilUji(), tabelKendaraan()
+	config.DB.Table(uji).
+		Select(daftarKolomHasilUjiJoin()).
+		Joins("JOIN " + kend + " ON " + uji + ".kendaraan_id = " + kend + ".id").
+		Where(uji + ".deleted_at IS NULL").
+		Order(uji + ".tested_at DESC").
 		Find(&results)
 
 	w := csv.NewWriter(c.Writer)
@@ -293,6 +293,29 @@ func ExportCSV(c *gin.Context) {
 			fmt.Sprintf("%v", row["catatan"]),
 		})
 	}
+}
+
+// Nama tabel diambil dari model lewat naming strategy GORM agar query tidak
+// bergantung pada penamaan tabel secara hardcode. config.DB baru terisi
+// setelah startup, jadi penyebutannya ditunda sampai handler pertama jalan.
+var (
+	tabelHasilUji  = sync.OnceValue(func() string { return namaTabel(&models.HasilUji{}) })
+	tabelKendaraan = sync.OnceValue(func() string { return namaTabel(&models.Kendaraan{}) })
+)
+
+func namaTabel(model any) string {
+	stmt := &gorm.Statement{DB: config.DB}
+	if err := stmt.Parse(model); err != nil {
+		return ""
+	}
+	return stmt.Schema.Table
+}
+
+func daftarKolomHasilUjiJoin() string {
+	kolom := strings.Join([]string{
+		"plat_nomor", "merek", "tipe", "kategori", "jenis", "kapasitas_mesin", "tahun_pembuatan",
+	}, ", "+tabelKendaraan()+".")
+	return tabelHasilUji() + ".*, " + kolom
 }
 
 func evaluateEmission(kendaraan models.Kendaraan, co, co2, hc, o2, opasitas *float64) (string, bool, *string) {

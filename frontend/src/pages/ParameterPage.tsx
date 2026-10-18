@@ -103,11 +103,11 @@ const ParameterPage: React.FC = () => {
     setParamForm({
       kategori: param.kategori,
       tahun_min: param.tahun_min,
-      tahun_max: param.tahun_max,
+      tahun_max: param.tahun_max ?? null,
       tahun_operator: param.tahun_operator,
-      co_max: param.co_max,
-      hc_max: param.hc_max,
-      opasitas_max: param.opasitas_max,
+      co_max: param.co_max ?? null,
+      hc_max: param.hc_max ?? null,
+      opasitas_max: param.opasitas_max ?? null,
     });
     setEditingParamId(param.id);
     setShowParamForm(true);

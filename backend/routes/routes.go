@@ -3,7 +3,6 @@ package routes
 import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"web-app-uji-emisi/config"
 	"web-app-uji-emisi/controllers"
 	"web-app-uji-emisi/middleware"
 )
@@ -59,8 +58,9 @@ func SetupRoutes() *gin.Engine {
 				kendaraan.POST("", controllers.CreateKendaraan)
 				kendaraan.PUT("/:id", controllers.UpdateKendaraan)
 				kendaraan.DELETE("/:id", controllers.DeleteKendaraan)
-				kendaraan.POST("/upload", controllers.UploadCSV)
+				kendaraan.POST("/upload", controllers.UploadKendaraanFile)
 				kendaraan.GET("/template/csv", controllers.DownloadCSVTemplate)
+				kendaraan.GET("/template/excel", controllers.DownloadTemplateKendaraanExcel)
 			}
 
 			// Hasil uji routes
@@ -72,6 +72,9 @@ func SetupRoutes() *gin.Engine {
 				hasilUji.PUT("/:id", controllers.UpdateHasilUji)
 				hasilUji.DELETE("/:id", controllers.DeleteHasilUji)
 				hasilUji.GET("/export/csv", controllers.ExportCSV)
+				hasilUji.POST("/upload", controllers.UploadHasilUjiFile)
+				hasilUji.GET("/template/csv", controllers.DownloadTemplateHasilUjiCSV)
+				hasilUji.GET("/template/excel", controllers.DownloadTemplateHasilUjiExcel)
 			}
 
 			// Parameters routes (admin/supervisor only)

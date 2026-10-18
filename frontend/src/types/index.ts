@@ -43,11 +43,11 @@ export interface Parameter {
   id: string;
   kategori: string;
   tahun_min: number;
-  tahun_max?: number;
+  tahun_max?: number | null;
   tahun_operator: '<' | '>' | 'between';
-  co_max?: number;
-  hc_max?: number;
-  opasitas_max?: number;
+  co_max?: number | null;
+  hc_max?: number | null;
+  opasitas_max?: number | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;

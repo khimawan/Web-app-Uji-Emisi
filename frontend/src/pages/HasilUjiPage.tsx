@@ -6,6 +6,21 @@ import toast from 'react-hot-toast';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
+const BATAS_NILAI_UJI: { kolom: string; rentang: string; contoh: string }[] = [
+  { kolom: 'CO', rentang: '0 - 100 (%)', contoh: '0.85' },
+  { kolom: 'CO2', rentang: '0 - 100 (%)', contoh: '12.5' },
+  { kolom: 'HC', rentang: '0 - 10000 (ppm)', contoh: '120' },
+  { kolom: 'O2', rentang: '0 - 100 (%)', contoh: '1.2' },
+  { kolom: 'Lambda', rentang: '0.1 - 10', contoh: '0.99' },
+  { kolom: 'Opasitas', rentang: '0 - 100 (%)', contoh: '12.5' },
+];
+
+const KOLOM_UJI = ['plat_nomor', 'co', 'co2', 'hc', 'o2', 'lambda', 'opasitas', 'tanggal_uji'];
+
+const FORMAT_FILE = ['.csv', '.txt', '.xlsx', '.xlsm'];
+
+type ErrorUpload = { row: number; message: string };
+
 const HasilUjiPage: React.FC = () => {
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [data, setData] = useState<any[]>([]);
@@ -15,6 +30,8 @@ const HasilUjiPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterHasil, setFilterHasil] = useState('');
   const [filterKategori, setFilterKategori] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadErrors, setUploadErrors] = useState<ErrorUpload[]>([]);
 
   useEffect(() => {
     fetchData();
@@ -31,8 +48,8 @@ const HasilUjiPage: React.FC = () => {
         kategori: filterKategori,
       });
       if (response.success) {
-        setData(response.data.items);
-        setPagination(response.data.pagination);
+        setData(response.data?.items ?? []);
+        setPagination(response.data?.pagination ?? pagination);
       }
     } catch (error) {
       toast.error('Failed to fetch data');
@@ -65,6 +82,61 @@ const HasilUjiPage: React.FC = () => {
       toast.success('CSV downloaded');
     } catch (error) {
       toast.error('Failed to export CSV');
+    }
+  };
+
+  const unduhBlob = (blob: Blob, namaFile: string) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', namaFile);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadTemplate = async (format: 'csv' | 'excel') => {
+    try {
+      const blob = await hasilUjiAPI.downloadTemplate(format);
+      unduhBlob(blob, format === 'csv' ? 'template_import_hasil_uji.csv' : 'template_import_hasil_uji.xlsx');
+      toast.success(`Template ${format.toUpperCase()} berhasil diunduh`);
+    } catch {
+      toast.error('Gagal mengunduh template');
+    }
+  };
+
+  const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    const ekstensi = `.${file.name.split('.').pop()?.toLowerCase()}`;
+    if (!FORMAT_FILE.includes(ekstensi)) {
+      setUploadErrors([]);
+      toast.error(`Format ${ekstensi} tidak didukung. Gunakan CSV atau Excel (.xlsx)`);
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const response = await hasilUjiAPI.uploadFile(file);
+      const { success = 0, failed = 0, lulus = 0, errors = [] } = response.data || {};
+
+      setUploadErrors(errors);
+      if (failed > 0) {
+        toast.error(`Import selesai: ${success} tersimpan, ${failed} baris ditolak`);
+      } else {
+        toast.success(`${success} data hasil uji berhasil diimport (${lulus} lulus)`);
+      }
+
+      fetchData();
+      fetchStatistics();
+    } catch {
+      setUploadErrors([]);
+      toast.error('Gagal mengunggah file. Periksa format file Anda.');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -145,6 +217,103 @@ const HasilUjiPage: React.FC = () => {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Data Hasil Uji</h1>
 
+      {/* Import Data Hasil Uji dari CSV/Excel */}
+      <div className="bg-white rounded-lg shadow p-4">
+        <div className="flex flex-wrap justify-between items-center gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-gray-800">Import Data Hasil Uji</h2>
+            <p className="text-sm text-gray-500">
+              Tambahkan hasil uji emisi untuk kendaraan yang sudah terdaftar di Input Kendaraan.
+            </p>
+          </div>
+          <div className="flex flex-wrap space-x-2">
+            <button
+              onClick={() => handleDownloadTemplate('csv')}
+              className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600"
+            >
+              Template CSV
+            </button>
+            <button
+              onClick={() => handleDownloadTemplate('excel')}
+              className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600"
+            >
+              Template Excel
+            </button>
+            <label
+              className={`px-4 py-2 text-white rounded-md ${
+                isUploading ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 cursor-pointer'
+              }`}
+            >
+              {isUploading ? 'Mengunggah...' : 'Upload File'}
+              <input
+                type="file"
+                accept=".csv,.txt,.xlsx,.xlsm"
+                onChange={handleUploadFile}
+                disabled={isUploading}
+                className="hidden"
+              />
+            </label>
+          </div>
+        </div>
+
+        {uploadErrors.length > 0 && (
+          <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex justify-between items-start">
+              <h3 className="text-sm font-semibold text-red-800">
+                {uploadErrors.length} baris ditolak saat import
+              </h3>
+              <button onClick={() => setUploadErrors([])} className="text-red-600 hover:text-red-800 text-sm">
+                Tutup
+              </button>
+            </div>
+            <ul className="mt-2 space-y-1 text-sm text-red-700 max-h-60 overflow-y-auto">
+              {uploadErrors.map((err, i) => (
+                <li key={`${err.row}-${i}`}>
+                  <span className="font-medium">Baris {err.row}:</span> {err.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <details className="mt-4 text-sm">
+          <summary className="cursor-pointer font-semibold text-gray-700">
+            Panduan import hasil uji (format kolom &amp; nilai)
+          </summary>
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-600">
+            <div>
+              <p className="font-medium text-gray-700 mb-1">Kolom file (urutan bebas):</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                {KOLOM_UJI.map((k) => (
+                  <li key={k}>
+                    <code className="text-xs bg-gray-100 px-1 rounded">{k}</code>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs">
+                Wajib ada <code className="bg-gray-100 px-1 rounded">plat_nomor</code> dan minimal satu parameter uji.
+                <code className="bg-gray-100 px-1 rounded ml-1">tanggal_uji</code> opsional (format YYYY-MM-DD atau DD/MM/YYYY).
+              </p>
+            </div>
+            <div>
+              <p className="font-medium text-gray-700 mb-1">Rentang nilai yang diterima:</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                {BATAS_NILAI_UJI.map((b) => (
+                  <li key={b.kolom}>
+                    {b.kolom}: {b.rentang} <span className="text-gray-400">(contoh {b.contoh})</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs">
+                Pemisah desimal boleh <code className="bg-gray-100 px-1 rounded">.</code> atau{' '}
+                <code className="bg-gray-100 px-1 rounded">,</code>. Plat nomor harus sama persis dengan yang terdaftar di Input Kendaraan.
+                Status lulus/tidak lulus dan catatan dihitung otomatis oleh sistem.
+              </p>
+            </div>
+          </div>
+        </details>
+      </div>
+
       {/* Statistics Cards */}
       {statistics && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -187,7 +356,7 @@ const HasilUjiPage: React.FC = () => {
                 fill="#8884d8"
                 dataKey="value"
               >
-                {kategoriData.map((entry, index) => (
+                {kategoriData.map((_, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
@@ -210,7 +379,7 @@ const HasilUjiPage: React.FC = () => {
                 fill="#8884d8"
                 dataKey="value"
               >
-                {hasilData.map((entry, index) => (
+                {hasilData.map((_, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
@@ -233,7 +402,7 @@ const HasilUjiPage: React.FC = () => {
                 fill="#8884d8"
                 dataKey="value"
               >
-                {jenisData.map((entry, index) => (
+                {jenisData.map((_, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>

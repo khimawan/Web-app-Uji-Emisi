@@ -19,6 +19,17 @@ const AdminPage: React.FC = () => {
     role: 'anggota' as 'admin' | 'supervisor' | 'anggota',
   });
 
+  // Username admin disembunyikan; username supervisor & anggota tetap terlihat.
+  const sembunyikanUsername = (role: User['role']) => role === 'admin';
+
+  // Akun admin hanya boleh mengubah username & password-nya sendiri. Akun lain
+  // (admin lain atau supervisor) tidak boleh menyentuh kredensial admin.
+  const targetAdalahDiriSendiri = Boolean(editingId) && editingId === currentUser?.id;
+  const akunAdminMilikOrangLain =
+    Boolean(editingId) && formData.role === 'admin' && !targetAdalahDiriSendiri;
+  const bolehUbahUsername = !akunAdminMilikOrangLain;
+  const bolehUbahPassword = !akunAdminMilikOrangLain;
+
   useEffect(() => {
     fetchUsers();
   }, [pagination.page]);
@@ -42,12 +53,16 @@ const AdminPage: React.FC = () => {
     e.preventDefault();
     try {
       if (editingId) {
-        const updateData: any = {
+        // Username & password hanya dikirim bila diisi DAN pemohon berhak
+        // mengubahnya, sehingga akun admin milik orang lain tetap utuh.
+        const updateData: { nama: string; role: string; username?: string; password?: string } = {
           nama: formData.nama,
-          username: formData.username,
           role: formData.role,
         };
-        if (formData.password) {
+        if (bolehUbahUsername && formData.username) {
+          updateData.username = formData.username;
+        }
+        if (bolehUbahPassword && formData.password) {
           updateData.password = formData.password;
         }
         await usersAPI.update(editingId, updateData);
@@ -68,7 +83,8 @@ const AdminPage: React.FC = () => {
   const handleEdit = (user: User) => {
     setFormData({
       nama: user.nama,
-      username: user.username,
+      // Username admin tidak dimuat ke form sehingga tidak pernah tampil di layar.
+      username: user.role === 'admin' ? '' : user.username,
       password: '',
       role: user.role,
     });
@@ -135,8 +151,7 @@ const AdminPage: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {users.map((user, index) => (
+            <tbody className="bg-white divide-y divide-gray-200">              {users.map((user, index) => (
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {(pagination.page - 1) * pagination.limit + index + 1}
@@ -145,7 +160,11 @@ const AdminPage: React.FC = () => {
                     {user.nama}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {user.username}
+                    {sembunyikanUsername(user.role) ? (
+                      <span className="select-none tracking-widest" aria-label="Disembunyikan">••••••••</span>
+                    ) : (
+                      user.username
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <span
@@ -166,6 +185,22 @@ const AdminPage: React.FC = () => {
                       className="text-blue-600 hover:text-blue-900 mr-3"
                     >
                       Edit
+                      {user.role === 'admin' && user.id !== currentUser?.id && (
+                        <svg
+                          className="w-3.5 h-3.5 ml-1 inline-block"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <title>Kredensial hanya dapat diubah oleh admin ini sendiri</title>
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                          />
+                        </svg>
+                      )}
                     </button>
                     {user.role !== 'admin' && (
                       <button
@@ -251,27 +286,52 @@ const AdminPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">Username</label>
+                <label htmlFor="user-username" className="block text-sm font-medium text-gray-700">
+                  Username
+                </label>
                 <input
-                  type="text"
+                  id="user-username"
+                  name="username"
+                  type={formData.role === 'admin' && editingId ? 'password' : 'text'}
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  className="mt-1 block w-full border rounded-md px-3 py-2"
-                  required
+                  disabled={!bolehUbahUsername}
+                  className="mt-1 block w-full border rounded-md px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                  autoComplete="off"
+                  placeholder={!bolehUbahUsername ? '••••••••' : undefined}
+                  required={!editingId || bolehUbahUsername}
                 />
+                {editingId && formData.role === 'admin' && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    {bolehUbahUsername
+                      ? 'Ini akun Anda sendiri. Isi dengan username baru bila ingin menggantinya.'
+                      : 'Username akun admin hanya dapat diubah oleh admin itu sendiri.'}
+                  </p>
+                )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label htmlFor="user-password" className="block text-sm font-medium text-gray-700">
                   Password {editingId && '(Kosongkan jika tidak ingin mengubah)'}
                 </label>
                 <input
+                  id="user-password"
+                  name="password"
                   type="password"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="mt-1 block w-full border rounded-md px-3 py-2"
+                  disabled={!bolehUbahPassword}
+                  className="mt-1 block w-full border rounded-md px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                  autoComplete="new-password"
                   required={!editingId}
                 />
+                {editingId && formData.role === 'admin' && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    {bolehUbahPassword
+                      ? 'Isi bila ingin mengganti password akun Anda sendiri.'
+                      : 'Password akun admin hanya dapat diubah oleh admin itu sendiri.'}
+                  </p>
+                )}
               </div>
 
               <div>

@@ -1,8 +1,11 @@
 package controllers
 
 import (
+	"fmt"
+	"io"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -25,16 +28,28 @@ func GetHomeContent(c *gin.Context) {
 	config.DB.Where("content_type = ? AND is_active = ?", "image", true).
 		Order("sort_order").Find(&images)
 
-	var workingInstruction []models.HomeContent
-	config.DB.Where("content_type = ? AND is_active = ?", "working_instruction", true).
-		Order("sort_order").First(&workingInstruction)
+	// Normalisasi path file lama (tanpa garis depan) agar tetap bisa diakses.
+	for i := range images {
+		images[i].FilePath = normalizeFilePath(images[i].FilePath)
+	}
+
+	// Working instruction aktif hanya satu; dikirim sebagai objek (bukan array)
+	// agar konsisten dengan sisi frontend.
+	var workingInstruction models.HomeContent
+	var workingInstructionData *models.HomeContent
+	if err := config.DB.Where("content_type = ? AND is_active = ?", "working_instruction", true).
+		Order("sort_order").Order("created_at DESC").
+		First(&workingInstruction).Error; err == nil {
+		workingInstruction.FilePath = normalizeFilePath(workingInstruction.FilePath)
+		workingInstructionData = &workingInstruction
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
 			"descriptions":        descriptions,
 			"images":              images,
-			"working_instruction": workingInstruction,
+			"working_instruction": workingInstructionData,
 		},
 	})
 }
@@ -81,24 +96,26 @@ func UploadImage(c *gin.Context) {
 
 	// Save file
 	filename := uuid.New().String() + filepath.Ext(file.Filename)
- filepath := filepath.Join("uploads", "home", filename)
+	destPath := filepath.Join("uploads", "home", filename)
 
-	if err := c.SaveUploadedFile(file, filepath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to save file"})
+	if err := c.SaveUploadedFile(file, destPath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Gagal menyimpan file"})
 		return
 	}
 
 	userID, _ := c.Get("user_id")
+	createdBy, _ := userID.(string)
+	fileType := file.Header.Get("Content-Type")
 
 	content := models.HomeContent{
 		ID:          uuid.New().String(),
 		ContentType: "image",
 		Title:       &title,
-		FilePath:    &filepath,
-		FileType:    &file.Header.Get("Content-Type"),
+		FilePath:    ptr(publicFilePath(destPath)),
+		FileType:    &fileType,
 		SortOrder:   0,
 		IsActive:    true,
-		CreatedBy:   userID.(string),
+		CreatedBy:   createdBy,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
@@ -132,46 +149,100 @@ func DeleteImage(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Image deleted successfully"})
 }
 
+const maksUkuranWorkingInstruction = 10 << 20 // 10 MB
+
 func UploadWorkingInstruction(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "No file uploaded"})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Tidak ada file yang diunggah"})
 		return
 	}
 
-	// Save file
-	filename := uuid.New().String() + filepath.Ext(file.Filename)
- filepath := filepath.Join("uploads", "home", filename)
+	if file.Size > maksUkuranWorkingInstruction {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": fmt.Sprintf("Ukuran file maksimal %d MB", maksUkuranWorkingInstruction>>20),
+		})
+		return
+	}
 
-	if err := c.SaveUploadedFile(file, filepath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to save file"})
+	if strings.ToLower(filepath.Ext(file.Filename)) != ".pdf" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Format file harus PDF (.pdf)"})
+		return
+	}
+
+	// Validasi magic bytes: dokumen PDF selalu diawali "%PDF-".
+	src, err := file.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Gagal membuka file"})
+		return
+	}
+	defer src.Close()
+
+	header := make([]byte, 5)
+	if _, err := io.ReadFull(src, header); err != nil || string(header) != "%PDF-" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "File bukan PDF yang valid"})
+		return
+	}
+
+	destPath := filepath.Join("uploads", "home", uuid.New().String()+".pdf")
+	if err := c.SaveUploadedFile(file, destPath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Gagal menyimpan file"})
+		return
+	}
+
+	// Hanya satu working instruction yang aktif, jadi file lama dinonaktifkan
+	// ketika yang baru diunggah.
+	if err := config.DB.Model(&models.HomeContent{}).
+		Where("content_type = ? AND is_active = ?", "working_instruction", true).
+		Update("is_active", false).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Gagal mengganti working instruction lama"})
 		return
 	}
 
 	userID, _ := c.Get("user_id")
+	createdBy, _ := userID.(string)
+	title := filepath.Base(file.Filename)
 
 	content := models.HomeContent{
 		ID:          uuid.New().String(),
 		ContentType: "working_instruction",
-		FilePath:    &filepath,
-		FileType:    &file.Header.Get("Content-Type"),
+		Title:       &title,
+		FilePath:    ptr(publicFilePath(destPath)),
+		FileType:    ptr("application/pdf"),
 		SortOrder:   0,
 		IsActive:    true,
-		CreatedBy:   userID.(string),
+		CreatedBy:   createdBy,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
 
 	if err := config.DB.Create(&content).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to save content"})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Gagal menyimpan content"})
 		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
-		"message": "Working instruction uploaded successfully",
+		"message": "Working instruction berhasil diunggah",
 		"data":    content,
 	})
+}
+
+func ptr(v string) *string { return &v }
+
+// publicFilePath mengubah path di disk menjadi URL absolut pada origin yang sama
+// (mis. "uploads/home/x.pdf" -> "/uploads/home/x.pdf") supaya file dapat diakses
+// baik dari frontend SPA maupun langsung dari backend.
+func publicFilePath(path string) string {
+	return "/" + strings.TrimPrefix(filepath.ToSlash(path), "/")
+}
+
+func normalizeFilePath(p *string) *string {
+	if p == nil || *p == "" {
+		return p
+	}
+	return ptr(publicFilePath(*p))
 }
 
 func DeleteWorkingInstruction(c *gin.Context) {

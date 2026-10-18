@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { homeAPI } from '../services/api';
 import { HomeContent } from '../types';
-import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
+import { fileUrl } from '../utils/fileUrl';
+import toast from 'react-hot-toast';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -10,12 +11,24 @@ const Dashboard: React.FC = () => {
   const [images, setImages] = useState<HomeContent[]>([]);
   const [workingInstruction, setWorkingInstruction] = useState<HomeContent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Hanya admin & supervisor yang boleh melihat dan memakai opsi upload.
+  const canManageWorkingInstruction = user?.role === 'admin' || user?.role === 'supervisor';
+  const workingInstructionUrl = fileUrl(workingInstruction?.file_path);
+  const downloadName = (() => {
+    const title = workingInstruction?.title?.trim();
+    if (!title) return 'working-instruction.pdf';
+    return /\.pdf$/i.test(title) ? title : `${title}.pdf`;
+  })();
 
   useEffect(() => {
     fetchContent();
   }, []);
 
-  const fetchContent = async () => {
+  const fetchContent = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const response = await homeAPI.getContent();
       if (response.success) {
@@ -27,6 +40,49 @@ const Dashboard: React.FC = () => {
       toast.error('Failed to load content');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleUploadWorkingInstruction = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      toast.error('Format file harus PDF');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const response = await homeAPI.uploadWorkingInstruction(file);
+      if (response.success) {
+        toast.success('Working instruction berhasil diunggah');
+        await fetchContent(true);
+      } else {
+        toast.error(response.message || 'Upload working instruction gagal');
+      }
+    } catch (error) {
+      toast.error('Upload working instruction gagal');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDeleteWorkingInstruction = async () => {
+    if (!workingInstruction) return;
+    if (!window.confirm('Hapus working instruction yang sedang aktif?')) return;
+
+    try {
+      const response = await homeAPI.deleteWorkingInstruction(workingInstruction.id);
+      if (response.success) {
+        toast.success('Working instruction dihapus');
+        await fetchContent(true);
+      } else {
+        toast.error(response.message || 'Gagal menghapus working instruction');
+      }
+    } catch (error) {
+      toast.error('Gagal menghapus working instruction');
     }
   };
 
@@ -68,7 +124,7 @@ const Dashboard: React.FC = () => {
             {images.map((img) => (
               <div key={img.id} className="relative">
                 <img
-                  src={img.file_path}
+                  src={fileUrl(img.file_path)}
                   alt={img.title || 'Gambar'}
                   className="w-full h-48 object-cover rounded-lg"
                 />
@@ -84,29 +140,106 @@ const Dashboard: React.FC = () => {
       )}
 
       {/* Working Instruction */}
-      {workingInstruction && (
+      {(workingInstruction || canManageWorkingInstruction) && (
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Working Instruction</h2>
-          <div className="border rounded-lg overflow-hidden">
-            <iframe
-              src={workingInstruction.file_path}
-              className="w-full h-96"
-              title="Working Instruction"
-            />
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-800">Working Instruction</h2>
+            {canManageWorkingInstruction && (
+              <span className="text-xs text-gray-500">Dapat dikelola oleh Admin & Supervisor</span>
+            )}
           </div>
-          <div className="mt-4">
-            <a
-              href={workingInstruction.file_path}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-            >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Download PDF
-            </a>
-          </div>
+
+          {workingInstruction ? (
+            <>
+              <div className="border rounded-lg overflow-hidden bg-gray-50">
+                <iframe
+                  src={workingInstructionUrl}
+                  className="w-full h-96"
+                  title="Working Instruction"
+                />
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <a
+                  href={workingInstructionUrl}
+                  download={downloadName}
+                  type="application/pdf"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Download Working Instruction
+                </a>
+
+                {canManageWorkingInstruction && (
+                  <>
+                    <label
+                      className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white ${
+                        isUploading ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 cursor-pointer'
+                      }`}
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16" />
+                      </svg>
+                      {isUploading ? 'Mengunggah...' : 'Upload PDF'}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        onChange={handleUploadWorkingInstruction}
+                        disabled={isUploading}
+                        className="hidden"
+                      />
+                    </label>
+
+                    <button
+                      onClick={handleDeleteWorkingInstruction}
+                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      Hapus
+                    </button>
+                  </>
+                )}
+
+                <a
+                  href={workingInstructionUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 hover:underline"
+                >
+                  Buka di tab baru
+                </a>
+              </div>
+            </>
+          ) : (
+            <div className="border border-dashed border-gray-300 rounded-lg p-8 text-center">
+              <p className="text-gray-500 mb-4">Belum ada working instruction yang diunggah.</p>
+              {canManageWorkingInstruction && (
+                <label
+                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white ${
+                    isUploading ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 cursor-pointer'
+                  }`}
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16" />
+                  </svg>
+                  {isUploading ? 'Mengunggah...' : 'Upload PDF'}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    onChange={handleUploadWorkingInstruction}
+                    disabled={isUploading}
+                    className="hidden"
+                  />
+                </label>
+              )}
+            </div>
+          )}
         </div>
       )}
 

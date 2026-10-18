@@ -78,7 +78,7 @@ export const kendaraanAPI = {
     const response = await api.delete(`/kendaraan/${id}`);
     return response.data;
   },
-  uploadCSV: async (file: File) => {
+  uploadFile: async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
     const response = await api.post('/kendaraan/upload', formData, {
@@ -86,8 +86,8 @@ export const kendaraanAPI = {
     });
     return response.data;
   },
-  downloadTemplate: async () => {
-    const response = await api.get('/kendaraan/template/csv', { responseType: 'blob' });
+  downloadTemplate: async (format: 'csv' | 'excel') => {
+    const response = await api.get(`/kendaraan/template/${format}`, { responseType: 'blob' });
     return response.data;
   },
 };
@@ -116,6 +116,18 @@ export const hasilUjiAPI = {
   },
   exportCSV: async () => {
     const response = await api.get('/hasil-uji/export/csv', { responseType: 'blob' });
+    return response.data;
+  },
+  uploadFile: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post('/hasil-uji/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+  downloadTemplate: async (format: 'csv' | 'excel') => {
+    const response = await api.get(`/hasil-uji/template/${format}`, { responseType: 'blob' });
     return response.data;
   },
 };

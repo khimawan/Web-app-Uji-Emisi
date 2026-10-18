@@ -38,7 +38,7 @@ func GetUsers(c *gin.Context) {
 	var total int64
 	query.Count(&total)
 
-	var users []models.User
+	users := make([]models.User, 0)
 	if err := query.Order("created_at DESC").Find(&users).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch users"})
 		return
@@ -112,6 +112,26 @@ func UpdateUser(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request"})
 		return
+	}
+
+	// Username & password akun admin hanya boleh diubah oleh admin itu sendiri,
+	// sehingga supervisor (atau admin lain) tidak dapat mengambil alih akun admin.
+	requesterID, _ := c.Get("user_id")
+	if existing.Role == "admin" && requesterID != existing.ID {
+		if req.Username != "" {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "Username admin hanya dapat diubah oleh admin itu sendiri",
+			})
+			return
+		}
+		if req.Password != "" {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "Password admin hanya dapat diubah oleh admin itu sendiri",
+			})
+			return
+		}
 	}
 
 	if req.Nama != "" {

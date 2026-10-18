@@ -155,3 +155,13 @@ Web app Uji Emisi
 - user terdiri dalam kategori anggota, supervisor, dan admin.
 
 
+edit pada halaman input hasil uji emisi sebagai berikut:
+- tampilkan list kendaraan yang belum diberi data hasil uji emisi dibawah searchbar dari halaman input data kendaraan berupa kotak yang beisikan data plat nomor, kategori kendaraan, jenis kendaraan, merek kendaraan, dan tipe kendaraan
+- kotak tersebut dapat di klik untuk memberikan input nilai hasil uji emisi seperti yang dapat dilakukan pada search bar
+- untuk input data emisi kendaraan bensin tidak perlu input nilai opasitas
+- untuk input data emisi kendaraan solar hanya perlu memasukkan nilai opasitas tanpa perlu input nilai CO, CO2, HC, O2, dan lamda
+- berikan pop-up notifikasi hasil emisi kendaraan setelah melakukan input data hasil uji emisi
+- jika data dalam tabel berisikan banyak data, tabel dapat di scroll up and down
+- berikan tabel pada bagian bawah berupa list history data yang telah ditambahkan data uji emisi
+    * tabel ini berisikan kolom : kategori kendaraan, jenis kendaraan, merek kendaraan, tipe kendaraan, CO, CO2, HC, O2, Lamda, dan Opasitas
+    * tabel dapat di edit dan berikan feature multiple delete
