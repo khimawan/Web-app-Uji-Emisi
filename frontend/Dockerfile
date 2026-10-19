@@ -2,10 +2,10 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install
-
 COPY . .
+
+# node_modules di-install di host dan di-bind-mount lewat docker-compose,
+# jadi tidak perlu di-install di dalam image.
 
 EXPOSE 5173
 

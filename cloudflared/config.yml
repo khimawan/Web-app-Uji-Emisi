@@ -1,0 +1,6 @@
+tunnel: 9fcd53c1-9a69-4d71-9e0a-ea2df19f18ec
+
+ingress:
+  - hostname: ujiemusi.orasaurus.my.id
+    service: http://frontend:5173
+  - service: http_status:404
