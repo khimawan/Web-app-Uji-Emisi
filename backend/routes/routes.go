@@ -1,14 +1,24 @@
 package routes
 
 import (
+	"log"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"web-app-uji-emisi/config"
 	"web-app-uji-emisi/controllers"
 	"web-app-uji-emisi/middleware"
 )
 
 func SetupRoutes() *gin.Engine {
 	r := gin.Default()
+
+	// Hanya percayai proxy yang memang internal (Docker bridge / localhost).
+	// Dengan default "trust all", klien bisa mengirim X-Forwarded-For palsu
+	// sehingga rate limit per-IP bisa dilewati satu per satu.
+	if err := r.SetTrustedProxies(config.AppConfig.TrustedProxies); err != nil {
+		log.Fatalf("Gagal mengatur trusted proxies: %v", err)
+	}
 
 	// CORS middleware
 	r.Use(cors.New(cors.Config{
@@ -19,6 +29,13 @@ func SetupRoutes() *gin.Engine {
 		AllowCredentials: true,
 	}))
 
+	// Batas jumlah request yang diproses bersamaan. Dipasang paling awal
+	// supaya request yang sudah terlanjur berat tetap bisa ditolak.
+	r.Use(middleware.MaxConcurrency(config.AppConfig.MaxConcurrent))
+
+	// Rate limit umum untuk seluruh request.
+	r.Use(middleware.RateLimit(config.AppConfig.RateLimitPerMinute, config.AppConfig.RateLimitBurst))
+
 	// Serve static files
 	r.Static("/uploads", "./uploads")
 
@@ -28,7 +45,12 @@ func SetupRoutes() *gin.Engine {
 		// Auth routes (public)
 		auth := api.Group("/auth")
 		{
-			auth.POST("/login", controllers.Login)
+			// Login diberi limiter yang jauh lebih ketat: ini satu-satunya
+			// endpoint publik yang melakukan query database, dan target
+			// utama serangan brute force.
+			auth.POST("/login",
+				middleware.RateLimit(config.AppConfig.LoginRateLimit, config.AppConfig.LoginRateLimitBurst),
+				controllers.Login)
 			auth.POST("/logout", middleware.AuthMiddleware(), controllers.Logout)
 			auth.GET("/me", middleware.AuthMiddleware(), controllers.GetCurrentUser)
 		}

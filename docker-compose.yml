@@ -1,3 +1,11 @@
+# Batas ukuran log. Tanpa ini, log container bisa memakan seluruh disk eMMC
+# dalam waktu singkat ketika server sedang dibebani.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
     image: postgres:14-alpine
@@ -6,6 +14,14 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: uji_emisi
+    # Postgres ikut memakai RAM, jadi batasi dan percepat pelepasan memori.
+    command: >
+      postgres
+      -c shared_buffers=64MB
+      -c effective_cache_size=192MB
+      -c work_mem=2MB
+      -c maintenance_work_mem=16MB
+      -c max_connections=50
     ports:
       - "5432:5432"
     volumes:
@@ -16,6 +32,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging: *default-logging
 
   backend:
     build:
@@ -30,6 +47,37 @@ services:
       DB_NAME: uji_emisi
       JWT_SECRET: devin-secret-key-2024
       PORT: 8080
+
+      # --- Pembatas beban, semua bisa diubah tanpa rebuild image ---
+
+      # Rate limit umum per IP per menit, plus token yang boleh ditumpuk (burst).
+      RATE_LIMIT_PER_MINUTE: "120"
+      RATE_LIMIT_BURST: "40"
+
+      # Login jauh lebih ketat: satu-satunya endpoint publik yang query database,
+      # sekaligus target utama serangan brute force.
+      LOGIN_RATE_LIMIT_PER_MINUTE: "10"
+      LOGIN_RATE_LIMIT_BURST: "5"
+
+      # Batas request yang diproses bersamaan. Sisanya dapat 503 + Retry-After.
+      # Turunkan kalau RAM kecil dan sering kehabisan memori.
+      MAX_CONCURRENT_REQUESTS: "64"
+
+      # Pool koneksi PostgreSQL. Jaga total (open + idle) di bawah max_connections
+      # Postgres (50 di atas) supaya tidak ada proses yang ditolak koneksi.
+      DB_MAX_OPEN_CONNS: "20"
+      DB_MAX_IDLE_CONNS: "5"
+
+      # Timeout server (detik). WriteTimeout longgar karena export/import CSV
+      # bisa memproses ribuan baris.
+      SERVER_READ_TIMEOUT: "15"
+      SERVER_WRITE_TIMEOUT: "120"
+      SERVER_IDLE_TIMEOUT: "60"
+      SERVER_SHUTDOWN_TIMEOUT: "20"
+
+      # Hanya proxy internal (Docker bridge + localhost) yang boleh menyetel
+      # X-Forwarded-For. Tanpa ini klien bisa memalsukan IP untuk lolos rate limit.
+      TRUSTED_PROXIES: "172.16.0.0/12,127.0.0.1/8"
     ports:
       - "8080:8080"
     depends_on:
@@ -37,6 +85,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/uploads:/app/uploads
+    logging: *default-logging
 
   frontend:
     build:
@@ -48,6 +97,7 @@ services:
     volumes:
       - ./frontend:/app
     command: npm run dev -- --host
+    logging: *default-logging
 
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -59,6 +109,7 @@ services:
       - /root/.cloudflared/tunnel.token:/etc/cloudflared/tunnel.token:ro
     depends_on:
       - frontend
+    logging: *default-logging
 
 volumes:
   postgres_data:
