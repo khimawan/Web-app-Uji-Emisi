@@ -312,6 +312,72 @@ file itu ada sebelum `docker compose up`.
 bawaan repository. **Ganti keduanya** sebelum dipakai di lingkungan
 production yang nyata.
 
+### 12. Pembatas beban sudah aktif secara bawaan
+
+Backend sudah memasang dua lapis perlindungan, keduanya bisa diubah lewat
+environment variable di `docker-compose.yml` **tanpa rebuild image**:
+
+| Variabel | Bawaan | Fungsi |
+|---|---|---|
+| `RATE_LIMIT_PER_MINUTE` | 120 | Request/menit per IP untuk seluruh endpoint |
+| `RATE_LIMIT_BURST` | 40 | Token yang boleh ditumpuk sekaligus |
+| `LOGIN_RATE_LIMIT_PER_MINUTE` | 10 | Request/menit per IP untuk `/api/auth/login` saja |
+| `LOGIN_RATE_LIMIT_BURST` | 5 | Burst untuk login |
+| `MAX_CONCURRENT_REQUESTS` | 64 | Request yang boleh diproses bersamaan; sisanya dapat **503** |
+
+Melewati batas menghasilkan **429** (rate limit) atau **503** (beban penuh),
+keduanya membawa header `Retry-After`.
+
+State limiter disimpan di memori proses. Kalau someday backend dijalankan lebih
+dari satu instance, batas ini berlaku **per instance** dan harus dipindahkan ke
+Redis atau reverse proxy.
+
+### 13. `TRUSTED_PROXIES` jangan asal diperluas
+
+Rate limit memakai `c.ClientIP()`, yang di-backup `X-Forwarded-For` hanya dari
+proxy yang dipercaya. Nilai bawaan hanya mengizinkan Docker bridge
+(`172.16.0.0/12`) dan localhost.
+
+Kalau nilai ini diubah jadi terlalu luas, klien bisa mengirim
+`X-Forwarded-For` palsu dan memakai IP baru setiap request sehingga rate limit
+tidak pernah menyentuh batasnya.
+
+### 14. Timeout server dan graceful shutdown
+
+`SERVER_READ_TIMEOUT` (15 dtk) dan `SERVER_IDLE_TIMEOUT` (60 dtk) menutup celah
+slow-loris — satu koneksi yang dibuat menggantung akan menahan goroutine dan
+sebagian kecil RAM selamanya.
+
+`SERVER_WRITE_TIMEOUT` sengaja longgar (120 dtk) karena export dan import CSV
+bisa memproses ribuan baris. Kalau nilai ini dikecilkan, export besar akan
+terpotong di tengah.
+
+Saat menerima `SIGTERM`, backend menyelesaikan request yang sedang berjalan
+lalu keluar rapi, sehingga `docker compose restart` tidak memutus pengguna.
+
+### 15. Pool koneksi database wajib dibatasi
+
+`DB_MAX_OPEN_CONNS` (20) dan `DB_MAX_IDLE_CONNS` (5) membatasi koneksi ke
+PostgreSQL. Tanpa batas, setiap request yang bersamaan membuka koneksi baru
+sampai kuota `max_connections` habis dan database mulai menolak koneksi.
+
+### 16. Tuning PostgreSQL dan rotasi log
+
+`docker-compose.yml` menyetel `shared_buffers=64MB`, `work_mem=2MB`,
+`max_connections=50` — Anglia untuk mesin kecil.
+
+Setiap container punya rotasi log `10 MB x 3`. Tanpa ini, log Gin yang mencatat
+setiap request bisa memenuhi disk eMMC ketika server sedang dibebani.
+
+### 17. Kalau server tetap berat, urutannya begini
+
+1. Turunkan `MAX_CONCURRENT_REQUESTS` (misal 64 → 24). Ini tombol paling
+   langsung dan tidak mengubah perilaku lain.
+2. Naikkan `LOGIN_RATE_LIMIT_*` hanya kalau user legit banyak yang gagal login.
+3. Jangan menaikkan `DB_MAX_OPEN_CONNS` melebihi kapasitas RAM — tiap
+   koneksi PostgreSQL punya biaya memori.
+4. Naikkan batas baru hanya setelah mengukur, bukan menebak.
+
 ## Menjalankan Aplikasi
 
 ### Development Mode
