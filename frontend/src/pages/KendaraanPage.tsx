@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { kendaraanAPI } from '../services/api';
 import { Kendaraan, Pagination } from '../types';
+import TemplateDownloadMenu from '../components/TemplateDownloadMenu';
 import toast from 'react-hot-toast';
 
 // Nilai yang sama dengan backend (backend/controllers/kendaraan_csv.go).
@@ -48,6 +49,7 @@ const KendaraanPage: React.FC = () => {
   const [filterKategori, setFilterKategori] = useState('');
   const [filterJenis, setFilterJenis] = useState('');
   const [uploadErrors, setUploadErrors] = useState<ErrorUpload[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   const [formData, setFormData] = useState<FormKendaraan>({
     kategori: 'Umum',
@@ -164,8 +166,8 @@ const KendaraanPage: React.FC = () => {
 
   const handleDownloadTemplate = async (format: 'csv' | 'excel') => {
     try {
-      const response = await kendaraanAPI.downloadTemplate(format);
-      unduhBlob(new Blob([response]), format === 'excel' ? 'template_kendaraan.xlsx' : 'template_kendaraan.csv');
+      const blob = await kendaraanAPI.downloadTemplate(format);
+      unduhBlob(blob, format === 'excel' ? 'template_kendaraan.xlsx' : 'template_kendaraan.csv');
       toast.success(format === 'excel' ? 'Template Excel berhasil diunduh' : 'Template CSV berhasil diunduh');
     } catch (error) {
       toast.error('Gagal mengunduh template');
@@ -183,6 +185,8 @@ const KendaraanPage: React.FC = () => {
       toast.error(`Format ${ext || 'file'} belum didukung. Gunakan ${FORMAT_FILE.join(', ')}.`);
       return;
     }
+
+    setIsUploading(true);
 
     try {
       const response = await kendaraanAPI.uploadFile(file);
@@ -204,6 +208,8 @@ const KendaraanPage: React.FC = () => {
     } catch (error) {
       setUploadErrors([]);
       toast.error('Gagal mengunggah file');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -221,98 +227,114 @@ const KendaraanPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Input Data Kendaraan</h1>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => handleDownloadTemplate('csv')}
-            className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600"
-          >
-            Template CSV
-          </button>
-          <button
-            onClick={() => handleDownloadTemplate('excel')}
-            className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600"
-          >
-            Template Excel
-          </button>
-          <label className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 cursor-pointer">
-            Upload File
-            <input type="file" accept={FORMAT_FILE.join(',')} onChange={handleUploadFile} className="hidden" />
-          </label>
-          <button
-            onClick={() => { resetForm(); setEditingId(null); setShowForm(true); }}
-            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
-          >
-            + Tambah Kendaraan
-          </button>
-        </div>
+      <h1 className="text-2xl font-bold text-gray-900">Input Data Kendaraan</h1>
+
+      {/* Tambah Kendaraan */}
+      <div className="flex justify-start">
+        <button
+          onClick={() => { resetForm(); setEditingId(null); setShowForm(true); }}
+          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-8 py-4 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+        >
+          <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Tambah Kendaraan
+        </button>
       </div>
 
-      {uploadErrors.length > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex justify-between items-start">
-            <h2 className="text-sm font-semibold text-red-800">
-              {uploadErrors.length} baris ditolak saat upload
-            </h2>
-            <button onClick={() => setUploadErrors([])} className="text-red-600 hover:text-red-800 text-sm">
-              Tutup
-            </button>
+      {/* Import Data Kendaraan dari CSV/Excel */}
+      <div className="bg-white rounded-lg shadow p-4">
+        <div className="flex flex-wrap justify-between items-center gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-gray-800">Import Data Kendaraan</h2>
+            <p className="text-sm text-gray-500">
+              Tambahkan data kendaraan dari file CSV atau Excel.
+            </p>
           </div>
-          <ul className="mt-2 space-y-1 text-sm text-red-700 max-h-60 overflow-y-auto">
-            {uploadErrors.map((err, i) => (
-              <li key={`${err.row}-${i}`}>
-                <span className="font-medium">Baris {err.row}:</span> {err.message}
-              </li>
-            ))}
-          </ul>
+          <div className="flex flex-wrap space-x-2">
+            <TemplateDownloadMenu onDownload={handleDownloadTemplate} />
+            <label
+              className={`px-4 py-2 text-white rounded-md ${
+                isUploading ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 cursor-pointer'
+              }`}
+            >
+              {isUploading ? 'Mengunggah...' : 'Upload File'}
+              <input
+                type="file"
+                accept={FORMAT_FILE.join(',')}
+                onChange={handleUploadFile}
+                disabled={isUploading}
+                className="hidden"
+              />
+            </label>
+          </div>
         </div>
-      )}
 
-      {/* Panduan format upload */}
-      <details className="bg-white rounded-lg shadow p-4">
-        <summary className="cursor-pointer text-sm font-semibold text-gray-700">
-          Panduan format upload CSV &amp; Excel (semua jenis input yang tersedia)
-        </summary>
-        <div className="mt-3 text-sm text-gray-600">
-          <ol className="list-decimal list-inside space-y-1 mb-4">
-            <li>Klik <span className="font-medium">Template CSV</span> atau <span className="font-medium">Template Excel</span> — keduanya memuat panduan, contoh baris, dan (untuk Excel) daftar nilai yang bisa dipilih lewat dropdown.</li>
-            <li>Buka template, ganti/hapus baris contoh, lalu isi data Anda.</li>
-            <li>Simpan file (tetap <code className="text-xs bg-gray-100 px-1 rounded">.csv</code> atau <code className="text-xs bg-gray-100 px-1 rounded">.xlsx</code>) lalu unggah lewat tombol <span className="font-medium">Upload File</span>.</li>
-            <li>Baris yang formatnya salah ditolak per baris lengkap dengan alasannya; baris lain tetap tersimpan.</li>
-          </ol>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="font-medium text-gray-700 mb-1">Kolom file (urutan bebas):</p>
-              <ul className="list-disc list-inside space-y-0.5">
-                {['kategori', 'jenis', 'plat_nomor', 'merek', 'tipe', 'kapasitas_mesin', 'tahun_pembuatan'].map((k) => (
-                  <li key={k}><code className="text-xs bg-gray-100 px-1 rounded">{k}</code></li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <p className="font-medium text-gray-700 mb-1">Nilai yang tersedia:</p>
-              <ul className="list-disc list-inside space-y-0.5">
-                <li>Kategori: {KATEGORI_VALID.join(' / ')}</li>
-                {JENIS_VALID.map((j) => (
-                  <li key={j.nilai}>Jenis: {j.label}</li>
-                ))}
-              </ul>
-            </div>
-            <div className="md:col-span-2">
-              <p className="font-medium text-gray-700 mb-1">Aturan penulisan:</p>
-              <ul className="list-disc list-inside space-y-0.5">
-                <li>Format file: {FORMAT_FILE.join(', ')} — <code className="text-xs bg-gray-100 px-1 rounded">.xls</code> (Excel 97-2003) tidak didukung, simpan ulang sebagai <code className="text-xs bg-gray-100 px-1 rounded">.xlsx</code>.</li>
-                <li>kapasitas_mesin: angka bulat cc (contoh <code className="text-xs bg-gray-100 px-1 rounded">1496</code>).</li>
-                <li>tahun_pembuatan: angka bulat 4 digit (contoh <code className="text-xs bg-gray-100 px-1 rounded">2020</code>).</li>
-                <li>plat_nomor: huruf kapital, maks. 20 karakter (contoh <code className="text-xs bg-gray-100 px-1 rounded">B 1234 CDE</code>).</li>
-                <li>Pemisah kolom <code className="text-xs bg-gray-100 px-1 rounded">,</code> / <code className="text-xs bg-gray-100 px-1 rounded">;</code> / tab / <code className="text-xs bg-gray-100 px-1 rounded">|</code> otomatis dideteksi.</li>
-                <li>Baris kosong dan baris berawalan <code className="text-xs bg-gray-100 px-1 rounded">#</code> otomatis dilewati.</li>
-              </ul>
+        {/* Panduan format upload */}
+        <details className="mt-4">
+          <summary className="cursor-pointer text-sm font-semibold text-gray-700">
+            Panduan format upload CSV &amp; Excel (semua jenis input yang tersedia)
+          </summary>
+          <div className="mt-3 text-sm text-gray-600">
+            <ol className="list-decimal list-inside space-y-1 mb-4">
+              <li>Klik tombol <span className="font-medium">Template</span>, lalu pilih <span className="font-medium">Template CSV</span> atau <span className="font-medium">Template Excel</span> — keduanya memuat panduan, contoh baris, dan (untuk Excel) daftar nilai yang bisa dipilih lewat dropdown.</li>
+              <li>Buka template, ganti/hapus baris contoh, lalu isi data Anda.</li>
+              <li>Simpan file (tetap <code className="text-xs bg-gray-100 px-1 rounded">.csv</code> atau <code className="text-xs bg-gray-100 px-1 rounded">.xlsx</code>) lalu unggah lewat tombol <span className="font-medium">Upload File</span>.</li>
+              <li>Baris yang formatnya salah ditolak per baris lengkap dengan alasannya; baris lain tetap tersimpan.</li>
+            </ol>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="font-medium text-gray-700 mb-1">Kolom file (urutan bebas):</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  {['kategori', 'jenis', 'plat_nomor', 'merek', 'tipe', 'kapasitas_mesin', 'tahun_pembuatan'].map((k) => (
+                    <li key={k}><code className="text-xs bg-gray-100 px-1 rounded">{k}</code></li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="font-medium text-gray-700 mb-1">Nilai yang tersedia:</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  <li>Kategori: {KATEGORI_VALID.join(' / ')}</li>
+                  {JENIS_VALID.map((j) => (
+                    <li key={j.nilai}>Jenis: {j.label}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="md:col-span-2">
+                <p className="font-medium text-gray-700 mb-1">Aturan penulisan:</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  <li>Format file: {FORMAT_FILE.join(', ')} — <code className="text-xs bg-gray-100 px-1 rounded">.xls</code> (Excel 97-2003) tidak didukung, simpan ulang sebagai <code className="text-xs bg-gray-100 px-1 rounded">.xlsx</code>.</li>
+                  <li>kapasitas_mesin: angka bulat cc (contoh <code className="text-xs bg-gray-100 px-1 rounded">1496</code>).</li>
+                  <li>tahun_pembuatan: angka bulat 4 digit (contoh <code className="text-xs bg-gray-100 px-1 rounded">2020</code>).</li>
+                  <li>plat_nomor: huruf kapital, maks. 20 karakter (contoh <code className="text-xs bg-gray-100 px-1 rounded">B 1234 CDE</code>).</li>
+                  <li>Pemisah kolom <code className="text-xs bg-gray-100 px-1 rounded">,</code> / <code className="text-xs bg-gray-100 px-1 rounded">;</code> / tab / <code className="text-xs bg-gray-100 px-1 rounded">|</code> otomatis dideteksi.</li>
+                  <li>Baris kosong dan baris berawalan <code className="text-xs bg-gray-100 px-1 rounded">#</code> otomatis dilewati.</li>
+                </ul>
+              </div>
             </div>
           </div>
-        </div>
-      </details>
+        </details>
+
+        {uploadErrors.length > 0 && (
+          <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex justify-between items-start">
+              <h3 className="text-sm font-semibold text-red-800">
+                {uploadErrors.length} baris ditolak saat upload
+              </h3>
+              <button onClick={() => setUploadErrors([])} className="text-red-600 hover:text-red-800 text-sm">
+                Tutup
+              </button>
+            </div>
+            <ul className="mt-2 space-y-1 text-sm text-red-700 max-h-60 overflow-y-auto">
+              {uploadErrors.map((err, i) => (
+                <li key={`${err.row}-${i}`}>
+                  <span className="font-medium">Baris {err.row}:</span> {err.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow p-4">

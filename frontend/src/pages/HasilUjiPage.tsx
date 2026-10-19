@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { hasilUjiAPI } from '../services/api';
 import { Statistics, Pagination } from '../types';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import TemplateDownloadMenu from '../components/TemplateDownloadMenu';
 import toast from 'react-hot-toast';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
@@ -227,18 +228,7 @@ const HasilUjiPage: React.FC = () => {
             </p>
           </div>
           <div className="flex flex-wrap space-x-2">
-            <button
-              onClick={() => handleDownloadTemplate('csv')}
-              className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600"
-            >
-              Template CSV
-            </button>
-            <button
-              onClick={() => handleDownloadTemplate('excel')}
-              className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600"
-            >
-              Template Excel
-            </button>
+            <TemplateDownloadMenu onDownload={handleDownloadTemplate} />
             <label
               className={`px-4 py-2 text-white rounded-md ${
                 isUploading ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 cursor-pointer'
